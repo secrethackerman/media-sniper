@@ -1,0 +1,11 @@
+{
+  "name": "cf-browser-scraper",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "@cloudflare/puppeteer": "^0.0.9"
+  }
+}
