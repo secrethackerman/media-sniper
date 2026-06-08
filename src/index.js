@@ -7,26 +7,32 @@ export default {
       return new Response("Missing 'url' query parameter.", { status: 400 });
     }
 
+    // Adjusted to match your exact binding name: MY_BROWSER
+    if (!env.MY_BROWSER || typeof env.MY_BROWSER.quickAction !== 'function') {
+      return new Response(JSON.stringify({
+        success: false,
+        error: "The 'MY_BROWSER' environment binding is not active or authorized. Please check your Cloudflare Dashboard configuration."
+      }), { status: 500, headers: { "Content-Type": "application/json" } });
+    }
+
     try {
-      // The native scrape action expects target elements and their target attributes
-      const response = await env.BROWSER.quickAction("scrape", {
+      // Call quickAction directly on MY_BROWSER
+      const response = await env.MY_BROWSER.quickAction("screenshot", {
         url: targetUrl,
-        elements: [
-          {
-            selector: "video",       // Find all <video> tags
-            type: "element",
-            attributes: ["src", "paused", "currentTime", "duration"] // Grab these fields
-          },
-          {
-            selector: "video source", // Also check nested <source> tags if present
-            type: "element",
-            attributes: ["src", "type"]
-          }
-        ]
+        evaluate: `(() => {
+          const streams = [];
+          document.querySelectorAll('video').forEach(v => { if (v.src) streams.push({ src: v.src, type: 'tagUrl' }); });
+          performance.getEntriesByType('resource').forEach(r => {
+            if (r.name.includes('.m3u8') || r.name.includes('.mp4')) { streams.push({ src: r.name, type: 'network' }); }
+          });
+          return JSON.stringify(streams);
+        })()`
       });
 
-      const data = await response.json();
-      return new Response(JSON.stringify({ success: true, matches: data }), {
+      const resultHeader = response.headers.get("X-Evaluation-Result");
+      const parsedStreams = resultHeader ? JSON.parse(resultHeader) : [];
+
+      return new Response(JSON.stringify({ success: true, streams: parsedStreams }), {
         headers: { "Content-Type": "application/json" }
       });
 
