@@ -1,11 +1,9 @@
 {
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "media-sniper",
-  "version": "1.0.0",
-  "type": "module",
-  "scripts": {
-    "deploy": "wrangler deploy"
-  },
-  "dependencies": {
-    "@cloudflare/puppeteer": "0.0.5"
+  "main": "src/index.js",
+  "compatibility_date": "2026-06-08",
+  "browser": {
+    "binding": "MY_BROWSER"
   }
 }
