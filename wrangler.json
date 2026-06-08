@@ -1,6 +1,6 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "cf-browser-scraper",
+  "name": "media-sniper",
   "main": "src/index.js",
   "compatibility_date": "2026-06-08",
   "browser": {
