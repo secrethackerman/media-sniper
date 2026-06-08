@@ -3,6 +3,9 @@
   "name": "media-sniper",
   "main": "src/index.js",
   "compatibility_date": "2026-06-08",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
   "browser": {
     "binding": "MY_BROWSER"
   }
