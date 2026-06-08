@@ -1,7 +1,5 @@
-import chromium from '@cloudflare/puppeteer';
-
 export default {
-  async fetch(request, env, ctx) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     const targetUrl = url.searchParams.get("url");
 
@@ -9,117 +7,28 @@ export default {
       return new Response("Missing 'url' query parameter.", { status: 400 });
     }
 
-    // SANITY CHECK: Ensure binding is active before firing the engine
-    if (!env.MY_BROWSER) {
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: "The MY_BROWSER environment binding is missing. Please check Cloudflare dashboard settings." 
-      }), { status: 500, headers: { "Content-Type": "application/json" } });
-    }
-
-    let browser;
     try {
-      browser = await chromium.launch(env.MY_BROWSER);
-      const page = await browser.newPage();
-
-      await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36');
-      
-      // Changed to networkidle2 so asynchronous stream-loaders have time to initialize
-      await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
-
-      const capturedMedia = await page.evaluate(async () => {
-        return new Promise((resolve) => {
-          function completion(result) {
-            resolve(result.data || result);
-          }
-
-          // === YOUR INJECTED LOGIC ===
-          (function() {
-              window.button_m3u8VideoUrls_touchend = false;
-              window.m3u8VideoUrlsXmlM3u8 = '';
-              window.m3u8VideoUrlsm3u8Array = [];
-              var capturedVideos = [];
-
-              function ensureAbsoluteUrl(url) {
-                  if (!url) return url;
-                  return url.indexOf('/') === 0 ? window.location.origin + url : url;
-              }
-
-              function processAndSendVideo(videoObj) {
-                  if (!videoObj.src || !videoObj.pageSrc) return;
-                  if (videoObj.src === videoObj.pageSrc) return;
-                  videoObj.type = 'mpjex';
-                  if (!capturedVideos.some(v => v.src === videoObj.src)) {
-                      capturedVideos.push(videoObj);
-                  }
-              }
-
-              function scanNetworkResources() {
-                  const resources = performance.getEntriesByType('resource');
-                  resources.forEach(resource => {
-                      if (resource.initiatorType === 'xmlhttprequest' || resource.initiatorType === 'fetch') {
-                          if (resource.name.includes('.m3u8') || resource.name.includes('.mp4')) {
-                              processAndSendVideo({
-                                  'src': resource.name, 'pageSrc': window.location.href, 
-                                  'title': document.title, 'apiType': 'http', 'ua': navigator.userAgent
-                              });
-                          }
-                      }
-                  });
-              }
-
-              function scanDOMForVideos() {
-                  document.querySelectorAll('video').forEach(video => {
-                      var sourceUrl = video.src ? ensureAbsoluteUrl(video.src) : '';
-                      if (sourceUrl && sourceUrl.startsWith('http')) {
-                          processAndSendVideo({
-                              'src': sourceUrl, 'pageSrc': window.location.href,
-                              'title': document.title, 'apiType': 'tagUrl', 'ua': navigator.userAgent
-                          });
-                      }
-                  });
-              }
-
-              function startScraperEngine() {
-                  scanNetworkResources();
-                  scanDOMForVideos();
-                  
-                  let pollingInterval = setInterval(function () {
-                      scanNetworkResources();
-                      scanDOMForVideos();
-                      if (capturedVideos.length >= 1) {
-                          clearInterval(pollingInterval);
-                          completion({ 'data': capturedVideos });
-                      }
-                  }, 1000);
-                  
-                  setTimeout(function () {
-                      clearInterval(pollingInterval);
-                      completion({ 'data': capturedVideos });
-                  }, 15000);
-              }
-              
-              if (document.readyState === 'complete' || document.readyState === 'interactive') {
-                  startScraperEngine();
-              } else {
-                  document.addEventListener('DOMContentLoaded', startScraperEngine);
-              }
-          })();
-        });
+      // Use the native 'scrape' quick action. This runs out-of-band 
+      // and won't throw the /v1/acquire Puppeteer version error.
+      const response = await env.MY_BROWSER.quickAction("scrape", {
+        url: targetUrl,
+        // The prompt directs the browser's optimized extraction model on what to find
+        prompt: "Extract all streaming video source URLs, specifically looking for links ending in .m3u8 or .mp4, along with any video element attributes like current playback source, status, or duration.",
+        format: "json"
       });
 
-      await browser.close();
+      // The response returned from quickAction is a standard Response object containing the scraped data
+      const data = await response.json();
 
-      return new Response(JSON.stringify({ success: true, streams: capturedMedia }), {
+      return new Response(JSON.stringify({ success: true, data }), {
         headers: { "Content-Type": "application/json" }
       });
 
     } catch (error) {
-      if (browser) await browser.close();
       return new Response(JSON.stringify({ success: false, error: error.message }), {
         status: 500,
         headers: { "Content-Type": "application/json" }
       });
     }
-  }
+  },
 };
