@@ -9,24 +9,31 @@ export default {
       return new Response("Missing 'url' query parameter.", { status: 400 });
     }
 
+    // SANITY CHECK: Ensure binding is active before firing the engine
+    if (!env.MY_BROWSER) {
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: "The MY_BROWSER environment binding is missing. Please check Cloudflare dashboard settings." 
+      }), { status: 500, headers: { "Content-Type": "application/json" } });
+    }
+
     let browser;
     try {
-      // Launch the browser using the wrangler configuration binding
       browser = await chromium.launch(env.MY_BROWSER);
       const page = await browser.newPage();
 
       await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36');
-      await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      
+      // Changed to networkidle2 so asynchronous stream-loaders have time to initialize
+      await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
-      // Injects and runs your media scraper script inside the headless browser tab
       const capturedMedia = await page.evaluate(async () => {
         return new Promise((resolve) => {
-          
           function completion(result) {
             resolve(result.data || result);
           }
 
-          // === YOUR ORIGINAL MEDIA SCRAPER LOGIC ===
+          // === YOUR INJECTED LOGIC ===
           (function() {
               window.button_m3u8VideoUrls_touchend = false;
               window.m3u8VideoUrlsXmlM3u8 = '';
